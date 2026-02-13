@@ -1,0 +1,64 @@
+{
+  "name": "mcp-launcher",
+  "version": "1.0.0",
+  "description": "Deploy MCP (Model Context Protocol) servers to Google Cloud Run with a beautiful web dashboard",
+  "main": "dist/server/index.js",
+  "bin": {
+    "mcp-launcher": "./bin/deploy-mcp.js",
+    "deploy-mcp": "./bin/deploy-mcp.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "public/",
+    "template/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "npm run build:server && npm run build:frontend",
+    "build:server": "npx tsc",
+    "build:frontend": "cd src/frontend && npm run build && rm -rf ../../public && cp -r dist ../../public",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/server/index.js",
+    "dev": "npx ts-node src/server/index.ts",
+    "dev:frontend": "cd src/frontend && npm run dev",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cloud-run",
+    "gcp",
+    "deployment",
+    "cli",
+    "anthropic",
+    "ai",
+    "server"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.31",
+    "@google-cloud/logging": "^11.2.1",
+    "@google-cloud/monitoring": "^5.3.1",
+    "@google-cloud/run": "^3.2.0",
+    "dotenv": "^17.2.3",
+    "execa": "^9.6.1",
+    "express": "^5.2.1",
+    "google-auth-library": "^10.5.0",
+    "open": "^11.0.0",
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.13.10",
+    "@types/uuid": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3"
+  }
+}

@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+:root {
+  /* Deep Blue/Purple Premium Dark Theme */
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+
+  /* Glassmorphism Cards */
+  --card: 240 10% 6%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 240 10% 6%;
+  --popover-foreground: 0 0% 98%;
+
+  /* Vibrant Brand Colors (Purple/Blue/Pink Gradient feel base) */
+  --primary: 265 85% 65%;
+  /* Soft Purple */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 5% 15%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 240 5% 15%;
+  --muted-foreground: 240 5% 65%;
+
+  --accent: 265 85% 65%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 5% 20%;
+  --input: 240 5% 20%;
+  --ring: 265 85% 65%;
+
+  --radius: 0.75rem;
+
+  /* Custom Glass Surface */
+  --glass-bg: rgba(20, 20, 30, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Senja-style accent colors */
+  --stat-orange: #F97066;
+  --stat-green: #10B981;
+  --stat-purple: #8B5CF6;
+  --stat-yellow: #F59E0B;
+
+  /* Sidebar (matching reference) */
+  --sidebar-bg: 240 6% 10%;
+  --sidebar-border: 240 5% 15%;
+}
+
+/* Light theme for main content area */
+.light-content {
+  --background: 0 0% 98%;
+  --foreground: 240 10% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 10%;
+  --muted-foreground: 240 5% 45%;
+  --border: 240 5% 90%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.08), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.05), transparent 25%);
+  color: hsl(var(--foreground));
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}

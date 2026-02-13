@@ -1,0 +1,8 @@
+[project]
+name = "mcp-server-demo"
+version = "0.1.0"
+description = "Example MCP server for deployment to Cloud Run"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=3.0.0b1",
+]
