@@ -15,7 +15,10 @@ export async function runDeploymentPipeline({ projectId, projectPath, onLog }: O
     const runStep = async (stepName: string, command: string, args: string[]) => {
         onLog(`Starting ${stepName}...`, 'info');
         try {
-            const subprocess = execa(command, args, {
+            // Use shell mode to pipe "Y" to the command for automatic confirmation
+            // This bypasses gcloud prompts like "Do you want to continue (Y/n)?"
+            const fullCommand = `printf "Y\\n" | ${command} ${args.map(a => `"${a}"`).join(' ')}`;
+            const subprocess = execa('sh', ['-c', fullCommand], {
                 cwd: projectPath, // Run make in the user's project directory
                 env: { ...process.env, PROJECT_ID: projectId, FORCE_COLOR: '1' },
                 all: true

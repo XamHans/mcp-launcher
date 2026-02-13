@@ -10,24 +10,14 @@ interface LogsViewerProps {
     onRefresh: () => void;
 }
 
-const severityColors: Record<string, string> = {
-    DEFAULT: 'text-zinc-400',
-    DEBUG: 'text-zinc-500',
-    INFO: 'text-blue-400',
-    NOTICE: 'text-cyan-400',
-    WARNING: 'text-yellow-400',
-    ERROR: 'text-red-400',
-    CRITICAL: 'text-red-500 font-bold',
-};
-
-const severityBadgeColors: Record<string, string> = {
-    DEFAULT: 'bg-zinc-500/20 text-zinc-400',
-    DEBUG: 'bg-zinc-500/20 text-zinc-500',
-    INFO: 'bg-blue-500/20 text-blue-400',
-    NOTICE: 'bg-cyan-500/20 text-cyan-400',
-    WARNING: 'bg-yellow-500/20 text-yellow-400',
-    ERROR: 'bg-red-500/20 text-red-400',
-    CRITICAL: 'bg-red-600/30 text-red-500',
+const severityStyles: Record<string, { text: string; badge: string }> = {
+    DEFAULT: { text: 'text-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+    DEBUG: { text: 'text-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+    INFO: { text: 'text-foreground', badge: 'bg-primary/10 text-primary' },
+    NOTICE: { text: 'text-foreground', badge: 'bg-primary/10 text-primary' },
+    WARNING: { text: 'text-amber-500', badge: 'bg-amber-500/10 text-amber-500' },
+    ERROR: { text: 'text-red-500', badge: 'bg-red-500/10 text-red-500' },
+    CRITICAL: { text: 'text-red-500 font-medium', badge: 'bg-red-500/20 text-red-500' },
 };
 
 export function LogsViewer({ logs, isLoading, error, onRefresh }: LogsViewerProps) {
@@ -50,60 +40,62 @@ export function LogsViewer({ logs, isLoading, error, onRefresh }: LogsViewerProp
         }
     };
 
+    const getStyles = (severity: string) => severityStyles[severity] || severityStyles.DEFAULT;
+
     return (
-        <div class="bg-black/80 border border-[var(--border)] rounded-xl overflow-hidden shadow-2xl flex flex-col h-[350px]">
-            <div class="flex items-center justify-between px-4 py-3 bg-[var(--card)] border-b border-[var(--border)]">
-                <h3 class="text-sm font-medium text-zinc-400 flex items-center gap-2">
-                    <FileText class="w-4 h-4" />
-                    Cloud Logs
-                </h3>
+        <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col h-[350px]">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Cloud Logs</span>
+                </div>
                 <button
                     onClick={onRefresh}
                     disabled={isLoading}
-                    class="p-1.5 rounded-md hover:bg-white/5 transition-colors text-zinc-500 hover:text-white disabled:opacity-50 flex items-center gap-1.5"
-                    title="Refresh logs"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
                 >
-                    <RefreshCw class={cn("w-4 h-4", isLoading && "animate-spin")} />
-                    <span class="text-xs">Refresh</span>
+                    <RefreshCw className={cn("h-3 w-3", isLoading && "animate-spin")} />
+                    Refresh
                 </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+            <div className="flex-1 overflow-auto bg-black/30 p-3 font-mono text-[11px]">
                 {error ? (
-                    <div class="flex items-center gap-2 text-sm text-yellow-500 bg-yellow-500/10 px-3 py-2 rounded-lg">
-                        <AlertTriangle class="w-4 h-4 flex-shrink-0" />
+                    <div className="flex items-center gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-amber-500">
+                        <AlertTriangle className="h-4 w-4" />
                         <span>{error}</span>
                     </div>
                 ) : isLoading && logs.length === 0 ? (
-                    <div class="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2">
-                        <RefreshCw class="w-6 h-6 animate-spin" />
-                        <p>Loading logs...</p>
+                    <div className="flex h-full flex-col items-center justify-center text-muted-foreground/50">
+                        <RefreshCw className="h-5 w-5 animate-spin mb-2" />
+                        <p>Loading...</p>
                     </div>
                 ) : logs.length === 0 ? (
-                    <div class="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2">
-                        <FileText class="w-8 h-8 opacity-20" />
-                        <p>No logs available</p>
-                        <p class="text-[10px] opacity-70">Click refresh to fetch latest logs</p>
+                    <div className="flex h-full flex-col items-center justify-center text-muted-foreground/50">
+                        <FileText className="h-6 w-6 mb-2 opacity-20" />
+                        <p>No logs</p>
                     </div>
                 ) : (
-                    logs.map((log, i) => (
-                        <div key={i} class="flex items-start gap-2 break-words">
-                            <span class="opacity-40 select-none whitespace-nowrap">
-                                {formatTimestamp(log.timestamp)}
-                            </span>
-                            <span class={cn(
-                                "px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold whitespace-nowrap",
-                                severityBadgeColors[log.severity] || severityBadgeColors.DEFAULT
-                            )}>
-                                {log.severity}
-                            </span>
-                            <span class={severityColors[log.severity] || severityColors.DEFAULT}>
-                                {log.message}
-                            </span>
-                        </div>
-                    ))
+                    <div className="space-y-1">
+                        {logs.map((log, i) => {
+                            const styles = getStyles(log.severity);
+                            return (
+                                <div key={i} className="flex items-start gap-2">
+                                    <span className="text-muted-foreground/40 whitespace-nowrap">
+                                        {formatTimestamp(log.timestamp)}
+                                    </span>
+                                    <span className={cn("rounded px-1 py-0.5 text-[9px] uppercase font-medium", styles.badge)}>
+                                        {log.severity.slice(0, 4)}
+                                    </span>
+                                    <span className={cn("break-words", styles.text)}>
+                                        {log.message}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        <div ref={logsEndRef} />
+                    </div>
                 )}
-                <div ref={logsEndRef} />
             </div>
         </div>
     );

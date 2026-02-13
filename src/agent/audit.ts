@@ -89,7 +89,8 @@ deploy:
 \t\t--project $(PROJECT_ID) \\
 \t\t--allow-unauthenticated \\
 \t\t--port 8080 \\
-\t\t--memory 1Gi
+\t\t--memory 1Gi \\
+\t\t--quiet
 
 # 3. UTILS
 logs:

@@ -154,7 +154,8 @@ deploy-source: ## Deploy from source using Cloud Build
 		--memory $(GCP_MEMORY) \
 		--allow-unauthenticated \
 		--region $(GCP_REGION) \
-		--project $(GCP_PROJECT_ID)
+		--project $(GCP_PROJECT_ID) \
+		--quiet
 
 deploy-image: docker-push ## Build and deploy Docker image to Cloud Run
 	@echo "$(GREEN)Deploying $(SERVICE_NAME) from image...$(RESET)"
@@ -165,7 +166,8 @@ deploy-image: docker-push ## Build and deploy Docker image to Cloud Run
 		--allow-unauthenticated \
 		--region $(GCP_REGION) \
 		--project $(GCP_PROJECT_ID) \
-		--platform managed
+		--platform managed \
+		--quiet
 
 # ==================== PROJECT INFO & HEALTH ====================
 .PHONY: info health logs url

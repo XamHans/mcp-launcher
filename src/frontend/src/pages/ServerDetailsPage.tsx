@@ -1,5 +1,4 @@
-
-import { ArrowLeft, ExternalLink, Play, Clock, Terminal, Globe, AlertCircle, Zap, ChevronDown, RefreshCw } from 'lucide-preact';
+import { ArrowLeft, ExternalLink, Play, Clock, Terminal, Globe, ChevronDown, RefreshCw, Zap, Trash2 } from 'lucide-preact';
 import type { MCPServer } from '../../../config/types';
 import { cn } from '../lib/utils';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -28,14 +27,12 @@ export function ServerDetailsPage({ server, onBack, onDeploy, onUpdate, onDelete
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showDeployMenu, setShowDeployMenu] = useState(false);
 
-    // Extract service name from deployed URL for GCP queries
     const serviceName = server.deployedUrl
         ? server.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 50)
         : '';
 
     const isDeployed = server.status === 'healthy' && !!server.deployedUrl;
 
-    // GCP Metrics & Logs
     const { data: metricsData, isLoading: metricsLoading, refetch: refetchMetrics } = useGcpMetrics({
         socket,
         projectId,
@@ -50,7 +47,6 @@ export function ServerDetailsPage({ server, onBack, onDeploy, onUpdate, onDelete
         enabled: isDeployed,
     });
 
-    // Auto-scroll logs
     useEffect(() => {
         if (logsEndRef.current) {
             logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -64,105 +60,104 @@ export function ServerDetailsPage({ server, onBack, onDeploy, onUpdate, onDelete
 
     const handleDelete = () => {
         onDelete(server.id);
-        onBack(); // Navigate back to dashboard
+        onBack();
     };
 
-    const statusColors: Record<string, string> = {
-        draft: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
-        deploying: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-        healthy: 'bg-green-500/10 text-green-400 border-green-500/20',
-        unhealthy: 'bg-red-500/10 text-red-400 border-red-500/20',
-        default: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+    const getStatusStyles = (status: MCPServer['status']) => {
+        switch (status) {
+            case 'healthy':
+                return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+            case 'deploying':
+                return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+            case 'unhealthy':
+                return 'bg-red-500/10 text-red-500 border-red-500/20';
+            default:
+                return 'bg-muted text-muted-foreground border-border';
+        }
     };
 
     return (
-        <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6 max-w-5xl mx-auto">
-            {/* Header / Nav */}
-            <div class="flex items-center gap-4 mb-2">
-                <button
-                    onClick={onBack}
-                    class="p-2 hover:bg-white/5 rounded-lg transition-colors text-zinc-400 hover:text-white"
-                >
-                    <ArrowLeft class="w-5 h-5" />
-                </button>
-                <div class="flex-1">
-                    <h1 class="text-2xl font-bold text-white flex items-center gap-3">
-                        {server.name}
-                        <span class={cn(
-                            "px-3 py-1 text-xs rounded-full border border-current uppercase tracking-wider font-semibold",
-                            statusColors[server.status] || statusColors.default
-                        )}>
-                            {server.status}
-                        </span>
-                    </h1>
-                    <p class="text-zinc-400 text-sm mt-1">{server.description}</p>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onBack}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card hover:bg-muted transition-colors"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                    </button>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-semibold">{server.name}</h1>
+                            <span className={cn(
+                                "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                                getStatusStyles(server.status)
+                            )}>
+                                {server.status}
+                            </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{server.description || 'No description'}</p>
+                    </div>
                 </div>
 
-                {/* Actions */}
-                <div class="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     {server.deployedUrl && (
                         <a
                             href={server.deployedUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-zinc-300 hover:text-white hover:bg-white/5 transition-all"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted transition-colors"
                         >
-                            <Globe class="w-4 h-4" />
-                            <span>Visit URL</span>
-                            <ExternalLink class="w-3 h-3 opacity-50" />
+                            <Globe className="h-4 w-4" />
+                            <span>Open</span>
+                            <ExternalLink className="h-3 w-3 opacity-50" />
                         </a>
                     )}
 
                     <button
                         onClick={() => setShowDeleteConfirm(true)}
-                        class="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all font-medium flex items-center gap-2"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:text-red-500 hover:border-red-500/30 transition-colors"
                     >
-                        Delete
+                        <Trash2 className="h-4 w-4" />
                     </button>
 
-                    <div class="relative">
+                    <div className="relative">
                         <button
                             onClick={() => setShowDeployMenu(!showDeployMenu)}
                             disabled={isDeploying}
-                            class={cn(
-                                "flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all shadow-lg hover:shadow-primary/25 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed",
+                            className={cn(
+                                "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                                 isDeploying
-                                    ? "bg-zinc-800 text-zinc-500"
-                                    : "bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary))/90]"
+                                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                                    : "bg-primary text-primary-foreground hover:bg-primary/90"
                             )}
                         >
-                            <Play class={cn("w-4 h-4", isDeploying && "animate-spin")} />
+                            <Play className={cn("h-4 w-4", isDeploying && "animate-spin")} />
                             {isDeploying ? 'Deploying...' : 'Deploy'}
-                            {!isDeploying && <ChevronDown class="w-4 h-4" />}
+                            {!isDeploying && <ChevronDown className="h-3 w-3" />}
                         </button>
 
-                        {/* Deploy Options Menu */}
                         {showDeployMenu && !isDeploying && (
-                            <div class="absolute right-0 top-full mt-2 w-64 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-border bg-popover shadow-md animate-fade-in">
                                 <button
-                                    onClick={() => {
-                                        setShowDeployMenu(false);
-                                        onDeploy(false);
-                                    }}
-                                    class="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-start gap-3"
+                                    onClick={() => { setShowDeployMenu(false); onDeploy(false); }}
+                                    className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors"
                                 >
-                                    <Play class="w-5 h-5 text-[hsl(var(--primary))] mt-0.5" />
+                                    <Play className="h-4 w-4 mt-0.5 text-primary" />
                                     <div>
-                                        <div class="text-sm font-medium text-white">Full Deploy</div>
-                                        <div class="text-xs text-zinc-500">Run AI analysis + build + deploy</div>
+                                        <div className="text-sm font-medium">Full Deploy</div>
+                                        <div className="text-xs text-muted-foreground">AI analysis + build + deploy</div>
                                     </div>
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        setShowDeployMenu(false);
-                                        onDeploy(true);
-                                    }}
-                                    class="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-start gap-3 border-t border-[var(--border)]"
+                                    onClick={() => { setShowDeployMenu(false); onDeploy(true); }}
+                                    className="flex w-full items-start gap-3 border-t border-border px-3 py-2.5 text-left hover:bg-muted transition-colors"
                                 >
-                                    <Zap class="w-5 h-5 text-yellow-400 mt-0.5" />
+                                    <Zap className="h-4 w-4 mt-0.5 text-amber-500" />
                                     <div>
-                                        <div class="text-sm font-medium text-white">Deploy Only</div>
-                                        <div class="text-xs text-zinc-500">Skip AI analysis (use existing Dockerfile)</div>
+                                        <div className="text-sm font-medium">Deploy Only</div>
+                                        <div className="text-xs text-muted-foreground">Skip AI analysis</div>
                                     </div>
                                 </button>
                             </div>
@@ -171,24 +166,24 @@ export function ServerDetailsPage({ server, onBack, onDeploy, onUpdate, onDelete
                 </div>
             </div>
 
-            {/* Delete Confirmation Modal Overlay */}
+            {/* Delete Modal */}
             {showDeleteConfirm && (
-                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-                        <h3 class="text-lg font-semibold text-white">Delete Server?</h3>
-                        <p class="text-sm text-zinc-400">
-                            Are you sure you want to delete <strong>{server.name}</strong>? This action cannot be undone.
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                    <div className="w-full max-w-sm rounded-lg border border-border bg-card p-5 shadow-lg">
+                        <h3 className="text-sm font-semibold">Delete Server</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Are you sure you want to delete <strong>{server.name}</strong>? This cannot be undone.
                         </p>
-                        <div class="flex justify-end gap-3 pt-2">
+                        <div className="mt-4 flex justify-end gap-2">
                             <button
                                 onClick={() => setShowDeleteConfirm(false)}
-                                class="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
+                                className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleDelete}
-                                class="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                className="rounded-md bg-red-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600 transition-colors"
                             >
                                 Delete
                             </button>
@@ -197,147 +192,109 @@ export function ServerDetailsPage({ server, onBack, onDeploy, onUpdate, onDelete
                 </div>
             )}
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Info & Stats */}
-                <div class="space-y-6">
-                    {/* Info Card */}
-                    <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-6 backdrop-blur-md">
-                        <h3 class="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <AlertCircle class="w-4 h-4" />
-                            Configuration
-                        </h3>
-                        <div class="space-y-4">
+            {/* Main Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left: Configuration */}
+                <div className="space-y-4">
+                    <div className="rounded-lg border border-border bg-card">
+                        <div className="border-b border-border px-4 py-3">
+                            <h3 className="text-sm font-medium">Configuration</h3>
+                        </div>
+                        <div className="p-4 space-y-4">
                             <div>
-                                <div class="flex justify-between items-center mb-1">
-                                    <label class="text-xs text-zinc-500">Source Path</label>
-                                    {!isEditing ? (
-                                        <button
-                                            onClick={() => setIsEditing(true)}
-                                            class="text-xs text-[hsl(var(--primary))] hover:underline"
-                                        >
-                                            Edit
-                                        </button>
-                                    ) : (
-                                        <div class="flex gap-2">
-                                            <button
-                                                onClick={handleSavePath}
-                                                class="text-xs text-green-400 hover:underline"
-                                            >
-                                                Save
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setIsEditing(false);
-                                                    setEditPath(server.sourcePath);
-                                                }}
-                                                class="text-xs text-zinc-500 hover:underline"
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
+                                <label className="text-xs text-muted-foreground">Source Path</label>
                                 {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editPath}
-                                        onInput={(e) => setEditPath((e.target as HTMLInputElement).value)}
-                                        class="w-full bg-black/20 border border-white/10 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
-                                        autoFocus
-                                    />
+                                    <div className="mt-1.5 flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={editPath}
+                                            onInput={(e) => setEditPath((e.target as HTMLInputElement).value)}
+                                            className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                                            autoFocus
+                                        />
+                                        <button onClick={handleSavePath} className="text-xs font-medium text-emerald-500 hover:text-emerald-600">Save</button>
+                                        <button onClick={() => { setIsEditing(false); setEditPath(server.sourcePath); }} className="text-xs font-medium text-muted-foreground">Cancel</button>
+                                    </div>
                                 ) : (
-                                    <code class="text-sm text-zinc-300 bg-black/30 px-2 py-1 rounded block overflow-hidden text-ellipsis whitespace-nowrap" title={server.sourcePath}>
-                                        {server.sourcePath}
-                                    </code>
+                                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                                        <code className="text-xs truncate" title={server.sourcePath}>{server.sourcePath}</code>
+                                        <button onClick={() => setIsEditing(true)} className="text-xs font-medium text-muted-foreground hover:text-foreground">Edit</button>
+                                    </div>
                                 )}
                             </div>
                             <div>
-                                <label class="text-xs text-zinc-500 block mb-1">Last Deployed</label>
-                                <div class="flex items-center gap-2 text-sm text-zinc-300">
-                                    <Clock class="w-4 h-4 text-zinc-500" />
-                                    {server.lastDeployedAt ? new Date(server.lastDeployedAt).toLocaleString() : 'Never'}
+                                <label className="text-xs text-muted-foreground">Last Deployed</label>
+                                <div className="mt-1.5 flex items-center gap-2 text-sm">
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    {server.lastDeployedAt 
+                                        ? new Date(server.lastDeployedAt).toLocaleString() 
+                                        : 'Never'
+                                    }
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Column: Console / Logs */}
-                <div class="lg:col-span-2">
-                    <div class="bg-black/80 border border-[var(--border)] rounded-xl overflow-hidden shadow-2xl flex flex-col h-[500px]">
-                        <div class="flex items-center justify-between px-4 py-3 bg-[var(--card)] border-b border-[var(--border)]">
-                            <h3 class="text-sm font-medium text-zinc-400 flex items-center gap-2">
-                                <Terminal class="w-4 h-4" />
-                                Deployment Logs
-                            </h3>
+                {/* Right: Logs */}
+                <div className="lg:col-span-2">
+                    <div className="rounded-lg border border-border bg-card overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                                <Terminal className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Deployment Logs</span>
+                            </div>
                             {isDeploying && (
-                                <span class="text-xs text-green-400 animate-pulse flex items-center gap-1.5">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-green-400" />
+                                <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                     Live
                                 </span>
                             )}
                         </div>
-
-                        <div class="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1.5 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                        <div className="h-[400px] overflow-auto bg-black/50 p-4 font-mono text-xs">
                             {logs.length === 0 ? (
-                                <div class="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2">
-                                    <Terminal class="w-8 h-8 opacity-20" />
-                                    <p>No deployment logs available.</p>
-                                    <p class="text-[10px] opacity-70">Click "Deploy Server" to generate logs.</p>
+                                <div className="flex h-full flex-col items-center justify-center text-muted-foreground/50">
+                                    <Terminal className="h-8 w-8 mb-2 opacity-20" />
+                                    <p>No logs yet</p>
                                 </div>
                             ) : (
-                                logs.map((log, i) => (
-                                    <div key={i} class={cn(
-                                        "break-words",
-                                        log.type === 'error' ? 'text-red-400' :
-                                            log.type === 'success' ? 'text-green-400' :
-                                                'text-zinc-400'
-                                    )}>
-                                        <span class="opacity-30 mr-3 select-none">{log.time}</span>
-                                        <span>{log.message}</span>
-                                    </div>
-                                ))
+                                <div className="space-y-1">
+                                    {logs.map((log, i) => (
+                                        <div key={i} className={cn(
+                                            "break-words",
+                                            log.type === 'error' && "text-red-400",
+                                            log.type === 'success' && "text-emerald-400",
+                                            log.type !== 'error' && log.type !== 'success' && "text-muted-foreground"
+                                        )}>
+                                            <span className="opacity-40 mr-2">{log.time}</span>
+                                            <span>{log.message}</span>
+                                        </div>
+                                    ))}
+                                    <div ref={logsEndRef} />
+                                </div>
                             )}
-                            <div ref={logsEndRef} />
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Cloud Metrics & Logs - Only shown for deployed servers */}
+            {/* Cloud Metrics */}
             {isDeployed && (
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-                            <Globe class="w-5 h-5 text-[hsl(var(--primary))]" />
-                            Cloud Run Resources
-                        </h2>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-medium">Cloud Run Metrics</h2>
                         <button
-                            onClick={() => {
-                                refetchMetrics();
-                                refetchLogs();
-                            }}
+                            onClick={() => { refetchMetrics(); refetchLogs(); }}
                             disabled={metricsLoading || logsLoading}
-                            class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-zinc-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50"
                         >
-                            <RefreshCw class={cn("w-3.5 h-3.5", (metricsLoading || logsLoading) && "animate-spin")} />
-                            Refresh All
+                            <RefreshCw className={cn("h-3 w-3", (metricsLoading || logsLoading) && "animate-spin")} />
+                            Refresh
                         </button>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <MetricsPanel
-                            metrics={metricsData?.metrics ?? null}
-                            isLoading={metricsLoading}
-                            error={metricsData?.error}
-                            onRefresh={() => refetchMetrics()}
-                        />
-                        <LogsViewer
-                            logs={logsData?.logs ?? []}
-                            isLoading={logsLoading}
-                            error={logsData?.error}
-                            onRefresh={() => refetchLogs()}
-                        />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <MetricsPanel metrics={metricsData?.metrics ?? null} isLoading={metricsLoading} error={metricsData?.error} onRefresh={refetchMetrics} />
+                        <LogsViewer logs={logsData?.logs ?? []} isLoading={logsLoading} error={logsData?.error} onRefresh={refetchLogs} />
                     </div>
                 </div>
             )}

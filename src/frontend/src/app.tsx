@@ -1,15 +1,13 @@
-
 import { useState } from 'preact/hooks';
 import { useSocket } from './hooks/useSocket';
 import { Layout } from './components/Layout';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ServerDetailsPage } from './pages/ServerDetailsPage';
-
+import { PrerequisitesCheck } from './components/PrerequisitesCheck';
 import { SettingsPage } from './pages/SettingsPage';
 import { Modal } from './components/Modal';
 import './index.css';
-
 
 export function App() {
   const {
@@ -21,21 +19,19 @@ export function App() {
     deleteServer,
     deployServer,
     deploying,
-    logs
+    logs,
+    prerequisites,
+    checkPrerequisites
   } = useSocket();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
-
-  // Modal States
   const [isAddServerModalOpen, setIsAddServerModalOpen] = useState(false);
   const [newServerName, setNewServerName] = useState('');
   const [newServerPath, setNewServerPath] = useState('');
-
-  // Navigation State
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
 
   const handleAddServer = () => {
-    if (!newServerName || !newServerPath) return; // Simple validation
+    if (!newServerName || !newServerPath) return;
     createServer({
       name: newServerName,
       sourcePath: newServerPath,
@@ -46,7 +42,6 @@ export function App() {
     setNewServerPath('');
   };
 
-  // If not onboarded, show Onboarding Page full screen
   if (!config.onboardingCompleted) {
     return (
       <OnboardingPage
@@ -62,14 +57,22 @@ export function App() {
   return (
     <Layout activeTab={activeTab} onTabChange={(tab) => {
       setActiveTab(tab);
-      setSelectedServerId(null); // Reset selection on tab change
+      setSelectedServerId(null);
     }}>
       {activeTab === 'dashboard' && !selectedServer && (
-        <DashboardPage
-          servers={config.servers}
-          onAddServer={() => setIsAddServerModalOpen(true)}
-          onManageServer={(id) => setSelectedServerId(id)}
-        />
+        <>
+          <div className="mb-6">
+            <PrerequisitesCheck 
+              prerequisites={prerequisites} 
+              onRefresh={checkPrerequisites}
+            />
+          </div>
+          <DashboardPage
+            servers={config.servers}
+            onAddServer={() => setIsAddServerModalOpen(true)}
+            onManageServer={(id) => setSelectedServerId(id)}
+          />
+        </>
       )}
 
       {activeTab === 'dashboard' && selectedServer && (
@@ -99,42 +102,42 @@ export function App() {
         onClose={() => setIsAddServerModalOpen(false)}
         title="Add New Server"
       >
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-zinc-300">Server Name</label>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Server Name</label>
             <input
               type="text"
               value={newServerName}
               onInput={(e) => setNewServerName((e.target as HTMLInputElement).value)}
               placeholder="e.g. Weather Service"
-              class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               autoFocus
             />
           </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-zinc-300">Project Path</label>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Project Path</label>
             <input
               type="text"
               value={newServerPath}
               onInput={(e) => setNewServerPath((e.target as HTMLInputElement).value)}
               placeholder="/absolute/path/to/project"
-              class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
-            <p class="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               Path to the directory containing your MCP server code.
             </p>
           </div>
-          <div class="flex justify-end gap-3 mt-6">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={() => setIsAddServerModalOpen(false)}
-              class="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleAddServer}
               disabled={!newServerName || !newServerPath}
-              class="bg-[hsl(var(--primary))] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[hsl(var(--primary))/90] transition-colors disabled:opacity-50"
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               Add Server
             </button>

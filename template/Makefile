@@ -34,7 +34,8 @@ deploy:
 		--project $(PROJECT_ID) \
 		--allow-unauthenticated \
 		--port 8080 \
-		--memory 1Gi
+		--memory 1Gi \
+		--quiet
 
 # 3. UTILS
 logs:

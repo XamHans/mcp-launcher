@@ -1,4 +1,3 @@
-import { PageHeader } from '../components/Layout';
 import { Save } from 'lucide-preact';
 import { useState } from 'preact/hooks';
 import type { GlobalConfig } from '../../../config/types';
@@ -24,45 +23,50 @@ export function SettingsPage({ config, onSaveCredentials }: SettingsPageProps) {
     };
 
     return (
-        <div class="animate-in fade-in duration-500 max-w-2xl">
-            <PageHeader
-                title="Settings"
-                description="Manage your global configuration and credentials."
-            />
+        <div className="max-w-xl animate-fade-in">
+            <div className="mb-6">
+                <h1 className="text-lg font-semibold">Settings</h1>
+                <p className="text-sm text-muted-foreground">Manage your credentials and configuration</p>
+            </div>
 
-            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-6 space-y-6">
-                <div class="space-y-4">
-                    <h3 class="text-lg font-semibold text-white">Credentials</h3>
-
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-zinc-300">Google Cloud Project ID</label>
+            <div className="rounded-lg border border-border bg-card">
+                <div className="border-b border-border px-4 py-3">
+                    <h2 className="text-sm font-medium">Credentials</h2>
+                </div>
+                <div className="p-4 space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Google Cloud Project ID</label>
                         <input
                             type="text"
                             value={googleProjectId}
                             onInput={(e) => handleChange(setGoogleProjectId, (e.target as HTMLInputElement).value)}
-                            class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         />
                     </div>
 
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-zinc-300">Anthropic API Key</label>
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Anthropic API Key</label>
                         <input
                             type="password"
                             value={anthropicKey}
                             onInput={(e) => handleChange(setAnthropicKey, (e.target as HTMLInputElement).value)}
-                            class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         />
                     </div>
                 </div>
-
-                <div class="pt-4 border-t border-[var(--glass-border)] flex justify-end">
+                <div className="flex items-center justify-between border-t border-border px-4 py-3">
+                    {isDirty ? (
+                        <span className="text-xs text-amber-500">Unsaved changes</span>
+                    ) : (
+                        <span className="text-xs text-muted-foreground">Up to date</span>
+                    )}
                     <button
                         onClick={handleSave}
                         disabled={!isDirty}
-                        class="flex items-center gap-2 bg-[hsl(var(--primary))] text-white px-4 py-2 rounded-lg font-medium hover:bg-[hsl(var(--primary))/90] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
-                        <Save class="w-4 h-4" />
-                        Save Changes
+                        <Save className="h-4 w-4" />
+                        Save
                     </button>
                 </div>
             </div>
