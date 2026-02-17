@@ -2,6 +2,13 @@
     "compilerOptions": {
         "target": "ES2022",
         "module": "commonjs",
+        "moduleResolution": "node",
+        "baseUrl": ".",
+        "paths": {
+            "@modelcontextprotocol/sdk/*": [
+                "node_modules/@modelcontextprotocol/sdk/dist/cjs/*"
+            ]
+        },
         "outDir": "./dist",
         "rootDir": "./src",
         "strict": true,

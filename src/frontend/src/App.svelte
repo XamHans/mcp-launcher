@@ -25,6 +25,13 @@
   $: logs = $logsStore;
   $: deploying = $deployingStore;
   $: selectedServer = config.servers.find(s => s.id === selectedServerId) || null;
+
+  function coerceInputValue(e: unknown): string {
+    const maybeAny = e as any;
+    if (typeof maybeAny?.detail === 'string') return maybeAny.detail;
+    const target = maybeAny?.target as HTMLInputElement | undefined | null;
+    return typeof target?.value === 'string' ? target.value : '';
+  }
   
   onMount(() => {
     socketStore.connect();
@@ -88,6 +95,7 @@
         onDelete={handleDelete}
         isDeploying={deploying}
         {logs}
+        projectId={config.credentials.googleProjectId}
       />
     {:else if activeTab === 'settings'}
       <SettingsPage {config} />
@@ -105,13 +113,13 @@
       label="Server Name"
       placeholder="e.g. Weather Service"
       value={newServerName}
-      on:input={(e) => newServerName = e.detail}
+      on:input={(e) => newServerName = coerceInputValue(e)}
     />
     <Input
       label="Project Path"
       placeholder="/absolute/path/to/project"
       value={newServerPath}
-      on:input={(e) => newServerPath = e.detail}
+      on:input={(e) => newServerPath = coerceInputValue(e)}
     />
     <p class="hint">Path to the directory containing your MCP server code.</p>
     <div class="modal-actions">

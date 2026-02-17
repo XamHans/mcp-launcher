@@ -32,14 +32,25 @@ export async function verifyService(projectId: string, serviceName: string, loca
 
         // Cast to any because the types are sometimes restrictive or missing strict null checks
         const s = service as any;
-        const readyCondition = s.status?.conditions?.find((c: any) => c.type === 'Ready');
-        const isReady = readyCondition?.status === 'True';
-        const url = s.status?.url;
+        const conditions: any[] =
+            (Array.isArray(s.status?.conditions) ? s.status.conditions : [])
+            .concat(Array.isArray(s.conditions) ? s.conditions : []);
+        const readyCondition = conditions.find((c: any) => c?.type === 'Ready') || conditions[0];
+
+        const state = readyCondition?.state;
+        const status = readyCondition?.status;
+        const isReady =
+            status === 'True' ||
+            status === true ||
+            state === 'CONDITION_SUCCEEDED' ||
+            state === 'READY';
+
+        const url = s.uri || s.status?.url || s.status?.uri;
 
         return {
             ready: isReady,
             url: url || undefined,
-            error: isReady ? undefined : readyCondition?.message || 'Service not ready'
+            error: isReady ? undefined : readyCondition?.message || readyCondition?.reason || 'Service not ready'
         };
 
     } catch (error) {

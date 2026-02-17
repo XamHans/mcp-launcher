@@ -12,10 +12,10 @@
 - Real-time communication via WebSockets for deployment progress
 
 ### Frontend (`src/frontend/`)
-- **React + Vite** application
-- **Preact** for smaller bundle size
+- **Svelte + Vite** application
 - **Tailwind CSS** for styling
 - **Socket.io-client** for real-time updates
+- **Lucide icons** for UI elements
 
 ### Deployment Pipeline (`src/orchestrator/`)
 - Runs `make gcp-setup` to enable APIs and create registry
@@ -46,18 +46,25 @@ npx mcp-launcher         # Run via npx (uses bin/deploy-mcp.js)
 src/
 ├── server/index.ts      # Main Express server
 ├── server/socket.ts     # Socket.io handlers
+├── server/mcpClient.ts  # MCP client for testing deployed servers
 ├── orchestrator/runner.ts   # Deployment orchestration
 ├── gcp/                 # GCP API integrations
 │   ├── logs.ts
 │   ├── metrics.ts
+│   ├── service.ts
 │   └── verification.ts
 ├── agent/               # Agent/audit functionality
 ├── config/              # Configuration types
-├── frontend/            # React dashboard
-│   ├── src/app.tsx
-│   ├── src/pages/
-│   └── vite.config.ts
-└── public/              # Built frontend assets (generated)
+└── frontend/            # Svelte dashboard
+    ├── src/
+    │   ├── lib/
+    │   │   ├── components/   # UI components
+    │   │   ├── pages/        # Page components
+    │   │   ├── services/     # API services
+    │   │   ├── stores/       # Svelte stores
+    │   │   └── types/        # TypeScript types
+    │   └── main.ts
+    └── vite.config.ts
 
 template/                # MCP server template
 ├── math_bot.py          # Example FastMCP server
@@ -97,10 +104,46 @@ The `bin` field in package.json registers two commands:
 
 Both point to `bin/deploy-mcp.js` which checks for compiled code or runs via ts-node.
 
+## MCP Client Testing Features
+
+The dashboard includes a full MCP client for testing deployed servers:
+
+### Discovery (`mcpClient.ts`)
+- **inspectMcpServer()** - Connects to MCP endpoint and discovers:
+  - Available tools with input schemas
+  - Resources and resource templates
+  - Prompts with arguments
+  - Server capabilities and transport type (streamable-http or SSE)
+
+### Tool Invocation
+- **invokeMcpTool()** - Calls tools on the deployed MCP server
+- Auto-generates sample arguments from JSON schema
+- Displays results with content type handling (text, images, etc.)
+
+### Resource Reading
+- **readMcpResource()** - Fetches resource content by URI
+- Supports dynamic resources via URI templates
+
+### Prompt Fetching
+- **getMcpPrompt()** - Retrieves prompt templates with arguments
+- Displays messages with role indicators (user/assistant)
+
+### UI Components (ServerDetailsPage.svelte)
+- **MCP Client Tab** - Main interface for testing
+  - Connect to any MCP endpoint URL
+  - Custom headers support (for auth)
+  - Tool list with "Invoke" buttons
+  - Resource list with "Read" buttons
+  - Prompt list with "Get Prompt" buttons
+- **Modals** - Interactive dialogs for:
+  - Tool invocation with JSON argument editor
+  - Resource content display
+  - Prompt message viewing
+
 ## Dependencies
 
-- **Backend**: Express, Socket.io, Google Cloud SDKs, execa, dotenv
-- **Frontend**: React/Preact, Vite, Tailwind, Socket.io-client
+- **Backend**: Express, Socket.io, Google Cloud SDKs, @modelcontextprotocol/sdk, execa, dotenv
+- **Frontend**: Svelte, Vite, Tailwind, Socket.io-client, lucide-svelte
 - **Dev**: TypeScript, ts-node, @types/*
 
 ## Notes

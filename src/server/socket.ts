@@ -2,9 +2,11 @@ import { Server, Socket } from 'socket.io';
 import { runAuditAndGeneration } from '../agent/audit';
 import { runDeploymentPipeline } from '../orchestrator/runner';
 import { verifyService } from '../gcp/verification';
-import { getServiceMetrics } from '../gcp/metrics';
-import { getServiceLogs } from '../gcp/logs';
+import { getServiceMetrics, TimeRange as MetricsTimeRange } from '../gcp/metrics';
+import { getServiceLogs, TimeRange as LogsTimeRange } from '../gcp/logs';
+import { getServiceMetadata } from '../gcp/service';
 import { loadConfig, saveConfig, validateField, getFieldDefinitions, upsertServer, removeServer, GlobalConfig, MCPServer } from '../config/config';
+import { inspectMcpServer, invokeMcpTool, readMcpResource, getMcpPrompt } from './mcpClient';
 import { execa } from 'execa';
 import path from 'path';
 import fs from 'fs/promises';
@@ -134,6 +136,119 @@ export function setupSocketHandlers(io: Server) {
             }
         });
 
+        // --- MCP Inspection ---
+
+        socket.on('inspect-mcp', async (data: { url: string; headers?: Record<string, string>; requestId?: string }) => {
+            const { url, headers, requestId } = data || {};
+            console.log(`[Socket] inspect-mcp received from ${socket.id}, requestId: ${requestId}, url: ${url}`);
+
+            if (!url) {
+                console.log(`[Socket] inspect-mcp error: no URL provided`);
+                socket.emit('mcp-inspection-error', { requestId, message: 'MCP endpoint URL is required' });
+                return;
+            }
+
+            try {
+                console.log(`[Socket] Calling inspectMcpServer...`);
+                const result = await inspectMcpServer({ url, headers });
+                console.log(`[Socket] inspectMcpServer success, tools: ${result.tools.length}, resources: ${result.resources.length}`);
+                socket.emit('mcp-inspection-result', { requestId, result });
+                console.log(`[Socket] mcp-inspection-result emitted`);
+            } catch (error) {
+                console.error(`[Socket] inspectMcpServer error:`, error);
+                socket.emit('mcp-inspection-error', { requestId, message: String(error) });
+            }
+        });
+
+        // --- MCP Tool Invocation ---
+
+        socket.on('invoke-mcp-tool', async (data: { 
+            url: string; 
+            headers?: Record<string, string>; 
+            toolName: string; 
+            args: Record<string, unknown>;
+            requestId?: string;
+        }) => {
+            const { url, headers, toolName, args, requestId } = data || {};
+
+            if (!url || !toolName) {
+                socket.emit('mcp-tool-invocation-error', { 
+                    requestId, 
+                    message: 'URL and tool name are required' 
+                });
+                return;
+            }
+
+            try {
+                const result = await invokeMcpTool({ url, headers, toolName, args });
+                socket.emit('mcp-tool-invocation-result', { requestId, result });
+            } catch (error) {
+                socket.emit('mcp-tool-invocation-error', { 
+                    requestId, 
+                    message: String(error) 
+                });
+            }
+        });
+
+        // --- MCP Resource Reading ---
+
+        socket.on('read-mcp-resource', async (data: { 
+            url: string; 
+            headers?: Record<string, string>; 
+            uri: string;
+            requestId?: string;
+        }) => {
+            const { url, headers, uri, requestId } = data || {};
+
+            if (!url || !uri) {
+                socket.emit('mcp-resource-read-error', { 
+                    requestId, 
+                    message: 'URL and resource URI are required' 
+                });
+                return;
+            }
+
+            try {
+                const result = await readMcpResource({ url, headers, uri });
+                socket.emit('mcp-resource-read-result', { requestId, result });
+            } catch (error) {
+                socket.emit('mcp-resource-read-error', { 
+                    requestId, 
+                    message: String(error) 
+                });
+            }
+        });
+
+        // --- MCP Prompt Fetching ---
+
+        socket.on('get-mcp-prompt', async (data: { 
+            url: string; 
+            headers?: Record<string, string>; 
+            promptName: string;
+            args?: Record<string, string>;
+            requestId?: string;
+        }) => {
+            const { url, headers, promptName, args, requestId } = data || {};
+
+            if (!url || !promptName) {
+                socket.emit('mcp-prompt-error', { 
+                    requestId, 
+                    message: 'URL and prompt name are required' 
+                });
+                return;
+            }
+
+            try {
+                const result = await getMcpPrompt({ url, headers, promptName, args });
+                socket.emit('mcp-prompt-result', { requestId, result });
+            } catch (error) {
+                socket.emit('mcp-prompt-error', { 
+                    requestId, 
+                    message: String(error) 
+                });
+            }
+        });
+
         // --- Deployment ---
 
         socket.on('deploy-server', async (data: { serverId: string, deployOnly?: boolean }) => {
@@ -203,9 +318,14 @@ export function setupSocketHandlers(io: Server) {
                 socket.emit('step-update', { stepIndex: 1 }); // Infrastructure
 
                 // 3. Orchestration
+                const serviceName = server.cloudRunServiceName || server.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 50) || 'mcp-server';
+                const region = server.cloudRunRegion || 'us-central1';
+
                 const deployResult = await runDeploymentPipeline({
                     projectId,
                     projectPath,
+                    serviceName,
+                    region,
                     onLog: (message, type = 'info') => {
                         socket.emit('log', { message, type });
                         // Simple heuristic step updates
@@ -232,6 +352,8 @@ export function setupSocketHandlers(io: Server) {
                     server.status = 'healthy';
                     server.deployedUrl = finalUrl;
                     server.lastDeployedAt = new Date().toISOString();
+                    server.cloudRunServiceName = serviceName;
+                    server.cloudRunRegion = region;
                     await upsertServer(server);
 
                     socket.emit('global-config-update', { config, fieldDefinitions: getFieldDefinitions() });
@@ -259,7 +381,8 @@ export function setupSocketHandlers(io: Server) {
         socket.on('check-prerequisites', async () => {
             const result = {
                 gcloud: { installed: false, authenticated: false, fix: 'gcloud auth login' },
-                docker: { installed: false, running: false, fix: 'open -a Docker' }
+                docker: { installed: false, running: false, fix: 'open -a Docker' },
+                adc: { configured: false, fix: 'gcloud auth application-default login' }
             };
 
             try {
@@ -269,6 +392,13 @@ export function setupSocketHandlers(io: Server) {
                     await execa('gcloud', ['auth', 'print-identity-token'], { timeout: 5000 });
                     result.gcloud.authenticated = true;
                 } catch { result.gcloud.authenticated = false; }
+
+                try {
+                    await execa('gcloud', ['auth', 'application-default', 'print-access-token'], { timeout: 5000 });
+                    result.adc.configured = true;
+                } catch {
+                    result.adc.configured = false;
+                }
             } catch { result.gcloud.installed = false; }
 
             try {
@@ -285,23 +415,66 @@ export function setupSocketHandlers(io: Server) {
 
         // --- GCP Metrics & Logs ---
 
-        socket.on('get-service-metrics', async (data: { projectId: string, serviceName: string, location?: string }) => {
+        socket.on('verify-service', async (data: { projectId: string, serviceName: string, location?: string, serverId?: string }) => {
             try {
-                const { projectId, serviceName, location } = data;
-                const result = await getServiceMetrics(projectId, serviceName, location);
+                const { projectId, serviceName, location = 'us-central1', serverId } = data;
+                const result = await verifyService(projectId, serviceName, location);
+                
+                // If service not found and we have a serverId, update the local status
+                if (!result.ready && result.error?.includes('not found') && serverId) {
+                    const config = await loadConfig();
+                    const server = config.servers.find(s => s.id === serverId);
+                    if (server && server.status === 'healthy') {
+                        server.status = 'unhealthy';
+                        await upsertServer(server);
+                        socket.emit('global-config-update', { config, fieldDefinitions: getFieldDefinitions() });
+                    }
+                }
+                
+                socket.emit('service-verified', result);
+            } catch (error) {
+                socket.emit('service-verified', { ready: false, error: String(error) });
+            }
+        });
+
+        socket.on('get-service-metrics', async (data: { projectId: string, serviceName: string, location?: string, timeRange?: MetricsTimeRange }) => {
+            try {
+                const { projectId, serviceName, location, timeRange } = data;
+                
+                // First verify service exists
+                const verification = await verifyService(projectId, serviceName, location);
+                if (!verification.ready && verification.error?.toLowerCase().includes('not found')) {
+                    socket.emit('service-metrics', { 
+                        metrics: null, 
+                        error: verification.error || 'Service not found on GCP. It may have been deleted.' 
+                    });
+                    return;
+                }
+                
+                const result = await getServiceMetrics(projectId, serviceName, location, timeRange);
                 socket.emit('service-metrics', result);
             } catch (error) {
                 socket.emit('service-metrics', { metrics: null, error: String(error) });
             }
         });
 
-        socket.on('get-service-logs', async (data: { projectId: string, serviceName: string, location?: string, limit?: number }) => {
+        socket.on('get-service-logs', async (data: { projectId: string, serviceName: string, location?: string, timeRange?: LogsTimeRange, limit?: number }) => {
             try {
-                const { projectId, serviceName, location, limit } = data;
-                const result = await getServiceLogs(projectId, serviceName, location, limit);
+                const { projectId, serviceName, location, timeRange, limit } = data;
+                const result = await getServiceLogs(projectId, serviceName, location, timeRange, limit);
                 socket.emit('service-logs', result);
             } catch (error) {
                 socket.emit('service-logs', { logs: [], error: String(error) });
+            }
+        });
+
+        socket.on('get-service-metadata', async (data: { projectId: string, serviceName: string, location?: string }) => {
+            try {
+                const { projectId, serviceName, location } = data;
+                const result = await getServiceMetadata(projectId, serviceName, location);
+                socket.emit('service-metadata', result);
+            } catch (error) {
+                socket.emit('service-metadata', { metadata: null, error: String(error) });
             }
         });
     });

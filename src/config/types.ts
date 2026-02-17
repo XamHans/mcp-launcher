@@ -6,6 +6,8 @@ export interface MCPServer {
     status: 'draft' | 'deploying' | 'healthy' | 'unhealthy';
     deployedUrl?: string;
     lastDeployedAt?: string;
+    cloudRunServiceName?: string;
+    cloudRunRegion?: string;
 }
 
 export interface GlobalConfig {

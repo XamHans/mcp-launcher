@@ -5,10 +5,12 @@ type LogCallback = (message: string, type?: 'info' | 'warn' | 'error' | 'success
 interface OrchestrationOptions {
     projectId: string;
     projectPath: string;
+    serviceName: string;
+    region: string;
     onLog: LogCallback;
 }
 
-export async function runDeploymentPipeline({ projectId, projectPath, onLog }: OrchestrationOptions): Promise<{ success: boolean; error?: string; url?: string }> {
+export async function runDeploymentPipeline({ projectId, projectPath, serviceName, region, onLog }: OrchestrationOptions): Promise<{ success: boolean; error?: string; url?: string }> {
 
     let capturedUrl: string | undefined;
 
@@ -20,7 +22,7 @@ export async function runDeploymentPipeline({ projectId, projectPath, onLog }: O
             const fullCommand = `printf "Y\\n" | ${command} ${args.map(a => `"${a}"`).join(' ')}`;
             const subprocess = execa('sh', ['-c', fullCommand], {
                 cwd: projectPath, // Run make in the user's project directory
-                env: { ...process.env, PROJECT_ID: projectId, FORCE_COLOR: '1' },
+                env: { ...process.env, PROJECT_ID: projectId, SERVICE_NAME: serviceName, REGION: region, FORCE_COLOR: '1' },
                 all: true
             });
 
@@ -79,4 +81,3 @@ export async function runDeploymentPipeline({ projectId, projectPath, onLog }: O
         return { success: false, error: String(error) };
     }
 }
-
