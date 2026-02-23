@@ -6,6 +6,8 @@ Deploy MCP servers to Google Cloud Run from a single command.
 npx mcp-launcher
 ```
 
+<video src="https://github.com/XamHans/mcp-launcher/releases/download/v1.0.3/mcp-launcher-demo.mp4" controls width="100%"></video>
+
 ## What it does
 
 MCP Launcher gives you a local web dashboard to build, deploy, and monitor MCP (Model Context Protocol) servers on Google Cloud Run. You point it at your server code, click deploy, and get a live URL.
