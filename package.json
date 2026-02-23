@@ -1,6 +1,6 @@
 {
   "name": "mcp-launcher",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Deploy MCP (Model Context Protocol) servers to Google Cloud Run with a beautiful web dashboard",
   "main": "dist/server/index.js",
   "bin": {
