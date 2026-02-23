@@ -6,7 +6,7 @@ Deploy MCP servers to Google Cloud Run from a single command.
 npx mcp-launcher
 ```
 
-<video src="https://github.com/XamHans/mcp-launcher/releases/download/v1.0.3/mcp-launcher-demo.mp4" controls width="100%"></video>
+[![Demo](https://img.youtube.com/vi/-Aby7F4OBQo/maxresdefault.jpg)](https://youtu.be/-Aby7F4OBQo)
 
 ## What it does
 
