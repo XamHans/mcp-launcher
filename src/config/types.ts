@@ -8,6 +8,7 @@ export interface MCPServer {
     lastDeployedAt?: string;
     cloudRunServiceName?: string;
     cloudRunRegion?: string;
+    healthCheckIntervalMs?: number;
 }
 
 export interface GlobalConfig {

@@ -6,6 +6,8 @@ export interface ServiceMetrics {
     instanceCount: number;
     errorCount: number;
     errorRate: number;
+    cpuUtilization: number | null;
+    memoryUtilization: number | null;
 }
 
 export type TimeRange = '1h' | '6h' | '24h' | '7d';
@@ -20,6 +22,9 @@ const timeRangeToMs: Record<TimeRange, number> = {
 type PointValue = { doubleValue?: number; int64Value?: unknown } | null | undefined;
 
 let cachedRequestLatenciesUnit: string | null | undefined;
+
+// Module-level cached client for reuse across requests
+let cachedMetricsClient: any = null;
 
 function toNumber(value: unknown): number {
     if (typeof value === 'number') return value;
@@ -42,6 +47,33 @@ function getMostRecentPointValue(timeSeries: any[]): number | null {
     return getPointNumericValue(points[0]);
 }
 
+/**
+ * Sum ALL points across ALL time series to get the true total for DELTA metrics.
+ * A single series may have multiple aligned points when the alignment period
+ * is shorter than the query window.
+ */
+function sumAllPoints(timeSeries: any[]): number {
+    if (!Array.isArray(timeSeries) || timeSeries.length === 0) return 0;
+    let total = 0;
+    for (const series of timeSeries) {
+        const points = series?.points;
+        if (!Array.isArray(points)) continue;
+        for (const point of points) {
+            total += getPointNumericValue(point);
+        }
+    }
+    return total;
+}
+
+async function getOrCreateClient(): Promise<any> {
+    if (cachedMetricsClient) {
+        return cachedMetricsClient;
+    }
+    const { MetricServiceClient } = await import('@google-cloud/monitoring');
+    cachedMetricsClient = new MetricServiceClient();
+    return cachedMetricsClient;
+}
+
 async function getRequestLatenciesUnit(client: any, projectName: string): Promise<string | null> {
     if (cachedRequestLatenciesUnit !== undefined) return cachedRequestLatenciesUnit ?? null;
     try {
@@ -57,21 +89,19 @@ async function getRequestLatenciesUnit(client: any, projectName: string): Promis
 
 function latencyToMs(value: number | null, unit: string | null): number | null {
     if (value === null) return null;
-    // https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors
-    // Units are typically "s", but can vary; convert conservatively.
     if (!unit) return Math.round(value * 1000);
     const normalized = unit.trim().toLowerCase();
     if (normalized === 'ms') return Math.round(value);
     if (normalized === 's') return Math.round(value * 1000);
     if (normalized === 'us' || normalized === 'µs') return Math.round(value / 1000);
     if (normalized === 'ns') return Math.round(value / 1_000_000);
-    // default to seconds
     return Math.round(value * 1000);
 }
 
 /**
- * Fetches metrics for a Cloud Run service
- * Uses dynamic import to avoid crashing when ADC is not configured
+ * Fetches metrics for a Cloud Run service.
+ * All API calls are made in parallel via Promise.all for maximum speed.
+ * The MetricServiceClient is cached at module level for reuse.
  */
 export async function getServiceMetrics(
     projectId: string,
@@ -87,13 +117,13 @@ export async function getServiceMetrics(
         instanceCount: 0,
         errorCount: 0,
         errorRate: 0,
+        cpuUtilization: null,
+        memoryUtilization: null,
     };
 
     let client: any;
     try {
-        // Dynamic import to avoid loading gRPC at module initialization
-        const { MetricServiceClient } = await import('@google-cloud/monitoring');
-        client = new MetricServiceClient();
+        client = await getOrCreateClient();
         const projectName = `projects/${projectId}`;
 
         const now = new Date();
@@ -105,112 +135,159 @@ export async function getServiceMetrics(
             endTime: { seconds: Math.floor(now.getTime() / 1000) },
         };
 
-        // Filter for our specific service
         const resourceFilter = `resource.type="cloud_run_revision" AND resource.labels.service_name="${serviceName}" AND resource.labels.location="${location}"`;
 
         const durationSeconds = Math.max(60, Math.floor(durationMs / 1000));
 
-        // Request count across the whole time range.
-        // `run.googleapis.com/request_count` is a DELTA metric; we align by SUM and reduce by SUM across revisions.
-        const [requestCountSeries] = await client.listTimeSeries({
-            name: projectName,
-            filter: `metric.type="run.googleapis.com/request_count" AND ${resourceFilter}`,
-            interval: timeInterval,
-            view: 'FULL',
-            aggregation: {
-                alignmentPeriod: { seconds: durationSeconds },
-                perSeriesAligner: 'ALIGN_SUM',
-                crossSeriesReducer: 'REDUCE_SUM',
-                groupByFields: [],
-            },
-        });
-
-        const requestCount = Array.isArray(requestCountSeries) && requestCountSeries.length > 0
-            ? Math.round(getPointNumericValue(requestCountSeries[0]?.points?.[0]))
-            : 0;
-
-        // Fetch error count (5xx responses)
-        const [errorCountSeries] = await client.listTimeSeries({
-            name: projectName,
-            filter: `metric.type="run.googleapis.com/request_count" AND metric.labels.response_code_class="5xx" AND ${resourceFilter}`,
-            interval: timeInterval,
-            view: 'FULL',
-            aggregation: {
-                alignmentPeriod: { seconds: durationSeconds },
-                perSeriesAligner: 'ALIGN_SUM',
-                crossSeriesReducer: 'REDUCE_SUM',
-                groupByFields: [],
-            },
-        });
-
-        const errorCount = Array.isArray(errorCountSeries) && errorCountSeries.length > 0
-            ? Math.round(getPointNumericValue(errorCountSeries[0]?.points?.[0]))
-            : 0;
-
-        const errorRate = requestCount > 0 ? (errorCount / requestCount) * 100 : 0;
-
-        // Instance count (GAUGE): use 60s alignment and take most recent point.
-        const [instanceSeries] = await client.listTimeSeries({
-            name: projectName,
-            filter: `metric.type="run.googleapis.com/container/instance_count" AND ${resourceFilter}`,
-            interval: timeInterval,
-            view: 'FULL',
-            aggregation: {
-                alignmentPeriod: { seconds: 60 },
-                perSeriesAligner: 'ALIGN_MAX',
-                crossSeriesReducer: 'REDUCE_MAX',
-                groupByFields: [],
-            },
-        });
-
-        const instanceCount = Math.round(getMostRecentPointValue(instanceSeries) ?? 0);
-
-        // Latency percentiles:
-        // `run.googleapis.com/request_latencies` is a distribution metric (unit: seconds).
-        // Use built-in percentile aligners to get scalar values and convert to ms.
+        // Common aggregation base for latency percentiles
         const latencyAggregationBase = {
             alignmentPeriod: { seconds: durationSeconds },
             crossSeriesReducer: 'REDUCE_MEAN',
             groupByFields: [],
         };
 
-        const [latencyP50Series] = await client.listTimeSeries({
-            name: projectName,
-            filter: `metric.type="run.googleapis.com/request_latencies" AND ${resourceFilter}`,
-            interval: timeInterval,
-            view: 'FULL',
-            aggregation: { ...latencyAggregationBase, perSeriesAligner: 'ALIGN_PERCENTILE_50' },
-        });
-        const [latencyP95Series] = await client.listTimeSeries({
-            name: projectName,
-            filter: `metric.type="run.googleapis.com/request_latencies" AND ${resourceFilter}`,
-            interval: timeInterval,
-            view: 'FULL',
-            aggregation: { ...latencyAggregationBase, perSeriesAligner: 'ALIGN_PERCENTILE_95' },
-        });
-        const [latencyP99Series] = await client.listTimeSeries({
-            name: projectName,
-            filter: `metric.type="run.googleapis.com/request_latencies" AND ${resourceFilter}`,
-            interval: timeInterval,
-            view: 'FULL',
-            aggregation: { ...latencyAggregationBase, perSeriesAligner: 'ALIGN_PERCENTILE_99' },
-        });
+        // Fire ALL metric queries in parallel for maximum speed
+        const [
+            requestCountResult,
+            errorCountResult,
+            instanceResult,
+            latencyP50Result,
+            latencyP95Result,
+            latencyP99Result,
+            cpuResult,
+            memoryResult,
+            latencyUnit,
+        ] = await Promise.all([
+            // Request count (DELTA → SUM)
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/request_count" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: {
+                    alignmentPeriod: { seconds: durationSeconds },
+                    perSeriesAligner: 'ALIGN_SUM',
+                    crossSeriesReducer: 'REDUCE_SUM',
+                    groupByFields: [],
+                },
+            }),
+            // Error count (5xx responses)
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/request_count" AND metric.labels.response_code_class="5xx" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: {
+                    alignmentPeriod: { seconds: durationSeconds },
+                    perSeriesAligner: 'ALIGN_SUM',
+                    crossSeriesReducer: 'REDUCE_SUM',
+                    groupByFields: [],
+                },
+            }),
+            // Instance count (GAUGE → MAX)
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/container/instance_count" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: {
+                    alignmentPeriod: { seconds: 60 },
+                    perSeriesAligner: 'ALIGN_MAX',
+                    crossSeriesReducer: 'REDUCE_MAX',
+                    groupByFields: [],
+                },
+            }),
+            // Latency P50
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/request_latencies" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: { ...latencyAggregationBase, perSeriesAligner: 'ALIGN_PERCENTILE_50' },
+            }),
+            // Latency P95
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/request_latencies" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: { ...latencyAggregationBase, perSeriesAligner: 'ALIGN_PERCENTILE_95' },
+            }),
+            // Latency P99
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/request_latencies" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: { ...latencyAggregationBase, perSeriesAligner: 'ALIGN_PERCENTILE_99' },
+            }),
+            // CPU Utilization (distribution → P99 gives a useful upper-bound view)
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/container/cpu/utilizations" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: {
+                    alignmentPeriod: { seconds: durationSeconds },
+                    perSeriesAligner: 'ALIGN_PERCENTILE_99',
+                    crossSeriesReducer: 'REDUCE_MEAN',
+                    groupByFields: [],
+                },
+            }),
+            // Memory Utilization (distribution → P99)
+            client.listTimeSeries({
+                name: projectName,
+                filter: `metric.type="run.googleapis.com/container/memory/utilizations" AND ${resourceFilter}`,
+                interval: timeInterval,
+                view: 'FULL',
+                aggregation: {
+                    alignmentPeriod: { seconds: durationSeconds },
+                    perSeriesAligner: 'ALIGN_PERCENTILE_99',
+                    crossSeriesReducer: 'REDUCE_MEAN',
+                    groupByFields: [],
+                },
+            }),
+            // Latency unit descriptor (cached after first call)
+            getRequestLatenciesUnit(client, projectName),
+        ]);
 
-        const latencyP50Seconds = getMostRecentPointValue(latencyP50Series);
-        const latencyP95Seconds = getMostRecentPointValue(latencyP95Series);
-        const latencyP99Seconds = getMostRecentPointValue(latencyP99Series);
+        // Extract results from parallel responses
+        const requestCountSeries = requestCountResult[0];
+        const errorCountSeries = errorCountResult[0];
+        const instanceSeries = instanceResult[0];
+        const latencyP50Series = latencyP50Result[0];
+        const latencyP95Series = latencyP95Result[0];
+        const latencyP99Series = latencyP99Result[0];
+        const cpuSeries = cpuResult[0];
+        const memorySeries = memoryResult[0];
+        const requestLatenciesUnit = latencyUnit;
 
-        const requestLatenciesUnit = await getRequestLatenciesUnit(client, projectName);
+        const requestCount = Math.round(sumAllPoints(requestCountSeries));
+        const errorCount = Math.round(sumAllPoints(errorCountSeries));
+        const errorRate = requestCount > 0 ? (errorCount / requestCount) * 100 : 0;
+        const instanceCount = Math.round(getMostRecentPointValue(instanceSeries) ?? 0);
 
-        const latencyP50Ms = latencyToMs(latencyP50Seconds, requestLatenciesUnit);
-        const latencyP95Ms = latencyToMs(latencyP95Seconds, requestLatenciesUnit);
-        const latencyP99Ms = latencyToMs(latencyP99Seconds, requestLatenciesUnit);
+        const latencyP50Ms = latencyToMs(getMostRecentPointValue(latencyP50Series), requestLatenciesUnit);
+        const latencyP95Ms = latencyToMs(getMostRecentPointValue(latencyP95Series), requestLatenciesUnit);
+        const latencyP99Ms = latencyToMs(getMostRecentPointValue(latencyP99Series), requestLatenciesUnit);
+
+        // CPU/Memory utilizations are reported as fractions (0.0–1.0), convert to percentage
+        const rawCpu = getMostRecentPointValue(cpuSeries);
+        const rawMem = getMostRecentPointValue(memorySeries);
+        const cpuUtilization = rawCpu !== null ? Math.round(rawCpu * 10000) / 100 : null;
+        const memoryUtilization = rawMem !== null ? Math.round(rawMem * 10000) / 100 : null;
 
         return {
-            metrics: { requestCount, latencyP50Ms, latencyP95Ms, latencyP99Ms, instanceCount, errorCount, errorRate },
+            metrics: {
+                requestCount, latencyP50Ms, latencyP95Ms, latencyP99Ms,
+                instanceCount, errorCount, errorRate,
+                cpuUtilization, memoryUtilization,
+            },
         };
     } catch (error: any) {
-        // Check for ADC-specific error message
+        // Reset cached client on error so next call creates a fresh one
+        cachedMetricsClient = null;
+
         const errorMsg = String(error);
         if (errorMsg.includes('Could not load the default credentials') ||
             errorMsg.includes('NO_ADC_FOUND')) {
@@ -220,11 +297,5 @@ export async function getServiceMetrics(
             };
         }
         return { metrics: defaultMetrics, error: errorMsg };
-    } finally {
-        try {
-            await client?.close?.();
-        } catch {
-            // ignore
-        }
     }
 }
